@@ -4,7 +4,6 @@ class UserData(BaseModel):
     username:str
     email:str
     password:str =Field(min_length=8,max_length=32)
-    
 
     @validator('email')
     def email_validation(value):
@@ -14,7 +13,6 @@ class UserData(BaseModel):
     
 class LoginData(BaseModel):
     email:str
-    password:str =Field(min_length=8,max_length=32)
     
 
     @validator('email')

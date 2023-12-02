@@ -1,84 +1,157 @@
 from flask import Blueprint,request,jsonify
-from flask_jwt_extended import jwt_required
-from bs4 import BeautifulSoup
-import requests
+from flask_jwt_extended import jwt_required,get_jwt
+from .model import Job,db,History
+from raw import get_url,raw_data
+
+"""
+Blueprint to handle all admin operations; Scrape to main db, 
+delete from main db, view scrape history
+"""
 
 
+admin_bp = Blueprint('admin',__name__,url_prefix='/api/admin')
 
-
-scrape_bp = Blueprint('scrape',__name__,url_prefix='/api/scrape')
-
-@scrape_bp.get('')
-#@jwt_required()
+#scrape data into main table
+@admin_bp.get('/scrape')
+@jwt_required()
 def scrape():
-    qrole=request.args.get('role')
-    qlocation=request.args.get('location')
-    qskills=request.args.get('skills')
+    claims = get_jwt()
+    if claims['role'] == 'admin':
+        role = request.args.get('role')
+        page = request.args.get('page')
+        if page is None and role is None:
+            return jsonify({"error":"request should have format: api/admin/scrape?role=software%20engineering&page=1"})
+        else:
+            url = get_url(role, page)
+            jobs = raw_data(url)
+            results = []
+            for job in jobs:
+                results.append({
+                    "role": job['role'],
+                    "company": job['company'],
+                    "location": job['location'],
+                    "required skills": job['required skills'],
+                    "description": job['description'],
+                    "posted": job['posted']
+                })
+                save=Job(role=job['role'],
+                         company=job['company'],
+                         location=job['location'],
+                         requirements=job['required skills'],
+                         description=job['description'],
+                         posted=job['description'])
+                db.session.add(save)
+            db.session.commit()
 
-    response1= requests.get('https://www.ghanajob.com/job-vacancies-search-ghana/Software%20Engineer?f%5B0%5D=im_field_offre_metiers%3A31&page=1')
-    response2 = requests.get('https://www.linkedin.com/jobs/search?keywords=Software%20Engineering&location=Ghana&geoId=105769538&trk=public_jobs_jobs-search-bar_search-submit&position=1&pageNum=0')
-    soup1 = BeautifulSoup(response1.content,'html.parser')
-    soup2 = BeautifulSoup(response2.content,'html.parser')
-    jobs1 = soup1.find_all('div', class_='col-lg-5 col-md-5 col-sm-5 col-xs-12 job-title')
-    jobs2 = soup2.find_all('div', class_="base-card relative w-full hover:no-underline focus:no-underline base-card--link base-search-card base-search-card--link job-search-card")
+            history=History(query_text=role,page=page)
+            db.session.add(history)
+            db.session.commit()
 
-    count = 0
-    job_list = []
+            return jsonify(results)
+    return jsonify({'msg': "Access to this endpoint denied"})
 
-    for job in jobs1:
-        count=count+1
-        role = job.find('a').text.strip()
-        try:
-            description = job.find('div',class_='search-description').text.strip()
-            description = description.replace('\n','')
-        except:
-            description=''
-        #print(description)
-        posted = job.find('p',class_='job-recruiter').text.strip()
-        #print(posted)
-        company = job.find('a',class_='company-name').text.strip()
-        #print(company)
-        skills = job.find('div',class_= 'job-tags').text.strip()
-        #print(skills)
-        locations = job.find('p', class_=None).text.strip()
-        #print(locations)
-        job= {
-            "role":role,
-            "company":company,
-            "location":locations,
-            "required skills":skills,
-            "description":description,
-            "posted":posted
-            }
+
+#all data in main table        
+@admin_bp.get('/')
+@jwt_required()
+def get_all_from_database():
+    claims = get_jwt()
+    if claims['role'] == 'admin':
+        jobs=Job.query.all()
+        if jobs:
+            list = []
+            for job in jobs:
+                list.append({
+                "id": job.id,
+                "role": job.role,
+                "company": job.company,
+                "location": job.location,
+                "required skills": job.requirements,
+                "description": job.description,
+                "posted": job.posted
+                        })
+            return jsonify(list)
+        else:
+            return jsonify({'msg': 'No jobs added yet'})
+    return jsonify({'msg': "Access to this endpoint denied"})
+
+
+#filter through all scraped data from main table
+@admin_bp.get('/')
+@jwt_required()
+def search():
+    claims = get_jwt()
+    if claims['role'] == 'admin':
+        q=request.args.get('q')
+        query='%{}%'.format(q)
+
+        jobs=Job.query.filter(Job.role.like(query)|Job.description.like(query)|Job.requirements.like(query)).all()
+        if jobs:
+            list = []
+            for job in jobs:
+                list.append({
+                "id": job.id,
+                "role": job.role,
+                "company": job.company,
+                "location": job.location,
+                "required skills": job.requirements,
+                "description": job.description,
+                "posted": job.posted
+                        })
+            return jsonify(list)
+        else:
+            return jsonify({'msg': 'No jobs added yet'})
+    return jsonify({'msg': "Access to this endpoint denied"})
+
+#delete from main main
+@admin_bp.delete('/<int:id>')
+@jwt_required()
+def delete(id):
+    claims = get_jwt()
+    if claims['role']=='admin':
+        job=Job.query.filter_by(id=id).first()
+        if job is not None:
+            db.session.delete(job)
+            db.session.commit()
+            return jsonify(),204
+        else:
+            jsonify({'msg':f'Jobs with {id}  does not exist'})
+    return jsonify({'msg':'Acces to this endpoint denied'})
+
+
+#Retrieves all scrape history
+@admin_bp.get('/history')
+@jwt_required()
+def get_scrape_history():
+    claims=get_jwt()
+    if claims['role']=='admin':
+        history=History.query.all()
+        if history:
+            list=[]
+            for i in history:
+                list.append(
+                    {
+                        "id":i.id,
+                        "query":i.query_text,
+                        "page":i.page
+                    }
+                )
+            return jsonify(list)
+        else:
+            return jsonify({'msg':'No history'})
+    return jsonify({'msg':'Access to this endpoint denied'})
+
+    
         
-        i={count:job}
-        job_list.append(i)
-        #print(len(job_list)
-        
 
-    for job in jobs2:
-        count=count+1
-        role =job.find("h3",class_="base-search-card__title").text.strip()
-        company =job.find('a',class_="hidden-nested-link").text.strip()
-        location = job.find('span',class_='job-search-card__location').text.strip()
-        try:
-            timestamp =job.find('time', class_='job-search-card__listdate').text.strip()
-        except:
-            timestamp = ''
 
-        job={"role":role,
-            "company":company,
-            "location":location,
-            "posted":timestamp
-            }
-        j={count:job}
-        job_list.append(j)
 
-    return jsonify({'jobs':job_list})
 
-@scrape_bp.get('')
-def save():
-    pass
+
+
+    
+    
+    
 
 
     
