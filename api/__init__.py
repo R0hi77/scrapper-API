@@ -7,7 +7,7 @@ from flask_jwt_extended import JWTManager
 from .model import User
 from .user import save_bp
 from .migrator import job_bp
-
+import psycopg2
 
 def create_app(test_config=None):
     app = Flask(__name__,instance_relative_config=True)

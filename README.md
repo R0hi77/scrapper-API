@@ -60,11 +60,28 @@ request url should be as follows `api/admin/scrape/?role=Backend%20eveloper&page
 - This endpoint filters through scrapped data based on request query, search query  can be particular job role or job skill requirement .
 Rquest url should have format `GET api/admin/?q=DevOps`
 
-4. #### Delete job from database
+4. #### Edit data in the main database
+- `PUT api/admin/<int:id>`
+- This endpoint allows admin to modify database content by a specified id
+- Requires the data below:
+```json
+{
+    "role":"frontend engineer",
+    "description":"string",
+    "location":"Central Region",
+    "company":"Amanda Inc.",
+    "requirements":"HTML,CSS,Javascript,React",
+    "posted":"3 weeks ago"
+}
+
+```
+
+5. #### Delete job from database
 - `DELETE api/admin/<int:id>`
 - This endpoint deletes saved jobs from main database by specified job id
 
-5. #### Scrape history
+
+6. #### Scrape history
 - `GET api/admin/history`
 - This endpoint tracks all scrape history it stores particular jobs scraped and its corresponding page number
 

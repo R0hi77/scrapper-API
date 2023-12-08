@@ -57,6 +57,7 @@ class History(db.Model):
     id= db.Column(db.Integer(),primary_key=True,autoincrement=True)
     query_text=db.Column(db.String(),nullable=False)
     page=db.Column(db.Integer(),nullable=False)
+    timestamp = db.Column(db.DateTime(), default=datetime.utcnow())
 
     def __repr__(self):
         return f'{self.query},{self.page}'

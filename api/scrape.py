@@ -2,6 +2,8 @@ from flask import Blueprint,request,jsonify
 from flask_jwt_extended import jwt_required,get_jwt
 from .model import Job,db,History
 from raw import get_url,raw_data
+from .schema import Edit
+from pydantic import ValidationError
 
 """
 Blueprint to handle all admin operations; Scrape to main db, 
@@ -103,6 +105,43 @@ def search():
             return jsonify({'msg': 'No jobs added yet'})
     return jsonify({'msg': "Access to this endpoint denied"})
 
+# edit an job in the main database
+@admin_bp.put('/<int:id>')
+@jwt_required()
+def edit_a_job(id):
+    claims = get_jwt()
+    if claims['role'] == 'admin':
+        data = request.get_json()
+        try:
+            validate =Edit(role=data['role'],
+                        description=data['description'],
+                        location=data['company'],
+                        company=data['company'],
+                        requirements=data['requirements'],
+                        posted=data['posted'])
+        except ValidationError as e:
+            return jsonify({'msg':str(e)})
+        job = Job(id=id,
+            role=validate.role,
+                  description=validate.description,
+                  location=validate.location,
+                  company=validate.company,
+                  requirements=validate.requirements,
+                  posted=validate.posted)
+        db.session.merge(job)
+        db.session.commit()
+        return jsonify(
+            {"id": job.id,
+                "role": job.role,
+                "company": job.company,
+                "location": job.location,
+                "required skills": job.requirements,
+                "description": job.description,
+                "posted": job.posted}
+        )
+
+
+
 #delete from main main
 @admin_bp.delete('/<int:id>')
 @jwt_required()
@@ -133,7 +172,8 @@ def get_scrape_history():
                     {
                         "id":i.id,
                         "query":i.query_text,
-                        "page":i.page
+                        "page":i.page,
+                        "timestamp":i.timestamp
                     }
                 )
             return jsonify(list)
